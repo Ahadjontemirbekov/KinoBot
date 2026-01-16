@@ -1,5 +1,5 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, BotCommand
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
 import json
 import os
@@ -1234,4 +1234,3 @@ if __name__ == '__main__':
         print("=" * 80 + "\n")
         logger.critical(f"❌ Kritik xatolik: {e}")
         raise
-
