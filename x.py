@@ -1194,6 +1194,11 @@ def main():
         logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         logger.info("🔄 Bot xabarlarni kutmoqda...")
 
+        updater.bot.set_my_commands([
+            BotCommand("start", "Botni boshlash"),
+            BotCommand("admin", "Adminlar uchun"),
+        ])
+
         # Polling rejimida ishga tushirish
         updater.start_polling()
         updater.idle()
@@ -1229,3 +1234,4 @@ if __name__ == '__main__':
         print("=" * 80 + "\n")
         logger.critical(f"❌ Kritik xatolik: {e}")
         raise
+
