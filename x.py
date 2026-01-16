@@ -1,12 +1,13 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, ChatMember
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
 import json
 import os
 from datetime import datetime
+import time
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 🎬 TELEGRAM KINO BOT - PROFESSIONAL VERSION
+# 🎬 TELEGRAM KINO BOT - MULTI ADMIN PROFESSIONAL VERSION
 # ═══════════════════════════════════════════════════════════════════════════
 
 logging.basicConfig(
@@ -22,15 +23,15 @@ logger = logging.getLogger(__name__)
 DATA_FILE = 'movies_data.json'
 STATS_FILE = 'stats.json'
 BLOCKED_FILE = 'blocked_users.json'
+ADMINS_FILE = 'admins.json'
 
-ADMIN_ID = 8381500320  # 🔴 O'Z TELEGRAM ID RAQAMINGIZNI YOZING!
-BOT_TOKEN = "8266825005:AAEj2OcohuiT2dbj09BQQbW6hUKUZXN5j-4"  # 🔴 BOT TOKENINGIZNI YOZING!
+MAIN_ADMIN_ID = 8381500320  # 🔴 ASOSIY ADMIN ID (faqat siz!)
+BOT_TOKEN = "8266825005:AAEj2OcohuiT2dbj09BQQbW6hUKUZXN5j-4"
 
-# 📢 MAJBURIY KANALLAR (o'z kanallaringizni qo'shing)
+# 📢 MAJBURIY KANALLAR
 REQUIRED_CHANNELS = [
-    "@kinolar873",  # 🔴 Kanal 1 username
-    "@uzmovi873",  # 🔴 Kanal 2 username
-    # Qo'shimcha kanallar qo'shish mumkin
+    "@kinolar873",
+    "@uzmovi873",
 ]
 
 
@@ -79,6 +80,20 @@ def save_blocked_users(blocked):
         json.dump(list(blocked), f, ensure_ascii=False, indent=2)
 
 
+def load_admins():
+    """Adminlar ro'yxatini yuklash"""
+    if os.path.exists(ADMINS_FILE):
+        with open(ADMINS_FILE, 'r', encoding='utf-8') as f:
+            return set(json.load(f))
+    return {MAIN_ADMIN_ID}  # Asosiy admin doim ro'yxatda
+
+
+def save_admins(admins):
+    """Adminlar ro'yxatini saqlash"""
+    with open(ADMINS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(list(admins), f, ensure_ascii=False, indent=2)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 🌐 GLOBAL O'ZGARUVCHILAR
 # ═══════════════════════════════════════════════════════════════════════════
@@ -86,6 +101,21 @@ def save_blocked_users(blocked):
 movies = load_data()
 stats = load_stats()
 blocked_users = load_blocked_users()
+admins = load_admins()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 🔐 ADMIN TEKSHIRISH FUNKSIYALARI
+# ═══════════════════════════════════════════════════════════════════════════
+
+def is_admin(user_id):
+    """Foydalanuvchi admin ekanligini tekshirish"""
+    return user_id in admins
+
+
+def is_main_admin(user_id):
+    """Foydalanuvchi asosiy admin ekanligini tekshirish"""
+    return user_id == MAIN_ADMIN_ID
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -134,7 +164,8 @@ def check_subscription(update: Update, context: CallbackContext) -> bool:
 # ⌨️ ADMIN KLAVIATURALARI
 # ═══════════════════════════════════════════════════════════════════════════
 
-def get_admin_keyboard():
+def get_admin_keyboard(user_id):
+    """Admin panelidagi tugmalar - foydalanuvchi huquqiga qarab"""
     keyboard = [
         [
             InlineKeyboardButton("➕ Kino qo'shish", callback_data='add_movie'),
@@ -148,7 +179,24 @@ def get_admin_keyboard():
             InlineKeyboardButton("📢 Reklama yuborish", callback_data='send_ad'),
             InlineKeyboardButton("🚫 Bloklash", callback_data='block_menu')
         ],
-        [InlineKeyboardButton("❌ Yopish", callback_data='close')]
+    ]
+
+    # Faqat asosiy admin uchun admin boshqaruv tugmasi
+    if is_main_admin(user_id):
+        keyboard.append([InlineKeyboardButton("👥 Admin boshqaruvi", callback_data='admin_management')])
+
+    keyboard.append([InlineKeyboardButton("❌ Yopish", callback_data='close')])
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_admin_management_keyboard():
+    """Admin boshqaruv paneli"""
+    keyboard = [
+        [InlineKeyboardButton("➕ Admin qo'shish", callback_data='add_admin')],
+        [InlineKeyboardButton("➖ Admin o'chirish", callback_data='remove_admin')],
+        [InlineKeyboardButton("📋 Adminlar ro'yxati", callback_data='admin_list')],
+        [InlineKeyboardButton("🔙 Orqaga", callback_data='back_to_admin')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -181,8 +229,8 @@ def start(update: Update, context: CallbackContext):
         )
         return
 
-    # Obunani tekshirish
-    if user_id != ADMIN_ID:
+    # Obunani tekshirish (adminlar uchun emas)
+    if not is_admin(user_id):
         if not check_subscription(update, context):
             return
 
@@ -190,9 +238,10 @@ def start(update: Update, context: CallbackContext):
     stats['total_users'].add(user_id)
     save_stats(stats)
 
-    if user_id == ADMIN_ID:
+    if is_admin(user_id):
+        admin_type = "ASOSIY ADMIN" if is_main_admin(user_id) else "ADMIN"
         update.message.reply_text(
-            "👑 *ADMIN PANELI*\n\n"
+            f"👑 *{admin_type} PANELI*\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
             "🎬 *BOT FUNKSIYALARI:*\n"
             "• Kino raqamini yuboring → Kino yuklanadi\n"
@@ -200,6 +249,7 @@ def start(update: Update, context: CallbackContext):
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
             "📊 *HOZIRGI STATISTIKA:*\n\n"
             f"👥 Foydalanuvchilar: *{len(stats['total_users'])}* ta\n"
+            f"👨‍💼 Adminlar: *{len(admins)}* ta\n"
             f"🎬 Yuborilgan kinolar: *{stats.get('movies_sent', 0)}* ta\n"
             f"📥 Jami so'rovlar: *{stats.get('total_requests', 0)}* ta\n"
             f"🎞 Bazadagi kinolar: *{len(movies)}* ta\n\n"
@@ -229,7 +279,7 @@ def start(update: Update, context: CallbackContext):
 def admin_panel(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
 
-    if user_id != ADMIN_ID:
+    if not is_admin(user_id):
         update.message.reply_text(
             "❌ *RUXSAT RAD ETILDI!*\n\n"
             "Sizda admin huquqi yo'q!",
@@ -237,12 +287,14 @@ def admin_panel(update: Update, context: CallbackContext):
         )
         return
 
+    admin_type = "ASOSIY ADMIN" if is_main_admin(user_id) else "ADMIN"
+
     update.message.reply_text(
-        "🎛 *ADMIN PANEL*\n\n"
+        f"🎛 *{admin_type} PANEL*\n\n"
         "━━━━━━━━━━━━━━━━━━━━━\n\n"
         "Kerakli bo'limni tanlang:\n\n"
         "━━━━━━━━━━━━━━━━━━━━━",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_admin_keyboard(user_id),
         parse_mode=ParseMode.MARKDOWN
     )
 
@@ -268,7 +320,7 @@ def button_callback(update: Update, context: CallbackContext):
             )
         return
 
-    if user_id != ADMIN_ID:
+    if not is_admin(user_id):
         query.edit_message_text(
             "❌ *RUXSAT RAD ETILDI!*\n\n"
             "Sizda admin huquqi yo'q!",
@@ -310,7 +362,7 @@ def button_callback(update: Update, context: CallbackContext):
                 "📋 *KINOLAR RO'YXATI*\n\n"
                 "━━━━━━━━━━━━━━━━━━━━━\n\n"
                 "❌ Hozircha kinolar yo'q",
-                reply_markup=get_admin_keyboard(),
+                reply_markup=get_admin_keyboard(user_id),
                 parse_mode=ParseMode.MARKDOWN
             )
         else:
@@ -321,7 +373,7 @@ def button_callback(update: Update, context: CallbackContext):
             movie_list += f"\n━━━━━━━━━━━━━━━━━━━━━\n\n📊 Jami: *{len(movies)}* ta kino"
             query.edit_message_text(
                 movie_list,
-                reply_markup=get_admin_keyboard(),
+                reply_markup=get_admin_keyboard(user_id),
                 parse_mode=ParseMode.MARKDOWN
             )
 
@@ -333,6 +385,7 @@ def button_callback(update: Update, context: CallbackContext):
             "📊 *BOT STATISTIKASI*\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"👥 Jami foydalanuvchilar: *{len(stats['total_users'])}* ta\n"
+            f"👨‍💼 Adminlar: *{len(admins)}* ta\n"
             f"🚫 Bloklangan: *{len(blocked_users)}* ta\n"
             f"🎬 Yuborilgan kinolar: *{stats.get('movies_sent', 0)}* ta\n"
             f"📥 Jami so'rovlar: *{stats.get('total_requests', 0)}* ta\n"
@@ -342,25 +395,33 @@ def button_callback(update: Update, context: CallbackContext):
         )
         query.edit_message_text(
             stats_text,
-            reply_markup=get_admin_keyboard(),
+            reply_markup=get_admin_keyboard(user_id),
             parse_mode=ParseMode.MARKDOWN
         )
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # REKLAMA YUBORISH
+    # REKLAMA YUBORISH - YANGILANGAN
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     elif query.data == 'send_ad':
         context.user_data['action'] = 'send_ad'
         query.edit_message_text(
             "📢 *REKLAMA YUBORISH*\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "📝 Reklama xabaringizni yuboring:\n\n"
-            "✅ Qo'llab-quvvatlanadigan formatlar:\n"
-            "• 📝 Text\n"
-            "• 🖼 Rasm\n"
-            "• 🎥 Video\n"
-            "• 📄 Hujjat\n\n"
-            "💡 Xabaringizni yuboring va barcha foydalanuvchilarga avtomatik yuboriladi!",
+            "📝 *Reklamangizni yuboring!*\n\n"
+            "✅ *Qo'llab-quvvatlanadigan formatlar:*\n\n"
+            "• 📝 Matn xabar\n"
+            "• 🖼 Rasm (caption bilan yoki bo'lmasdan)\n"
+            "• 🎥 Video (caption bilan yoki bo'lmasdan)\n"
+            "• 📄 Hujjat (caption bilan yoki bo'lmasdan)\n"
+            "• 🎵 Audio\n"
+            "• 🎤 Voice xabar\n"
+            "• 📹 Video xabar\n"
+            "• 📍 Joylashuv\n"
+            "• 📞 Kontakt\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "💡 *Qanday ishlaydi?*\n"
+            "Siz qanday xabar yuborsangiz, aynan shunday xabar barcha foydalanuvchilarga yuboriladi!\n\n"
+            "🚀 *Xabaringizni yuboring...*",
             parse_mode=ParseMode.MARKDOWN
         )
 
@@ -407,8 +468,8 @@ def button_callback(update: Update, context: CallbackContext):
             )
         else:
             blocked_list = "📋 *BLOKLANGAN FOYDALANUVCHILAR*\n\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-            for user_id in blocked_users:
-                blocked_list += f"🚫 `{user_id}`\n"
+            for uid in blocked_users:
+                blocked_list += f"🚫 `{uid}`\n"
             blocked_list += f"\n━━━━━━━━━━━━━━━━━━━━━\n\n📊 Jami: *{len(blocked_users)}* ta"
             query.edit_message_text(
                 blocked_list,
@@ -416,13 +477,75 @@ def button_callback(update: Update, context: CallbackContext):
                 parse_mode=ParseMode.MARKDOWN
             )
 
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # ADMIN BOSHQARUVI - FAQAT ASOSIY ADMIN UCHUN
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    elif query.data == 'admin_management':
+        if not is_main_admin(user_id):
+            query.answer("❌ Faqat asosiy admin uchun!", show_alert=True)
+            return
+
+        query.edit_message_text(
+            "👥 *ADMIN BOSHQARUVI*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Kerakli amalni tanlang:\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━",
+            reply_markup=get_admin_management_keyboard(),
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    elif query.data == 'add_admin':
+        if not is_main_admin(user_id):
+            query.answer("❌ Faqat asosiy admin uchun!", show_alert=True)
+            return
+
+        context.user_data['action'] = 'add_admin'
+        query.edit_message_text(
+            "➕ *ADMIN QO'SHISH*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📝 Yangi admin qilmoqchi bo'lgan foydalanuvchining ID raqamini yuboring:\n\n"
+            "💡 Foydalanuvchi botga /start yuborganida uning ID raqami ko'rinadi.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    elif query.data == 'remove_admin':
+        if not is_main_admin(user_id):
+            query.answer("❌ Faqat asosiy admin uchun!", show_alert=True)
+            return
+
+        context.user_data['action'] = 'remove_admin'
+        query.edit_message_text(
+            "➖ *ADMIN O'CHIRISH*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📝 O'chirmoqchi bo'lgan admin ID raqamini yuboring:",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    elif query.data == 'admin_list':
+        if not is_main_admin(user_id):
+            query.answer("❌ Faqat asosiy admin uchun!", show_alert=True)
+            return
+
+        admin_list_text = "👥 *ADMINLAR RO'YXATI*\n\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+        for admin_id in admins:
+            if admin_id == MAIN_ADMIN_ID:
+                admin_list_text += f"👑 `{admin_id}` - Asosiy Admin\n"
+            else:
+                admin_list_text += f"👨‍💼 `{admin_id}`\n"
+        admin_list_text += f"\n━━━━━━━━━━━━━━━━━━━━━\n\n📊 Jami: *{len(admins)}* ta"
+        query.edit_message_text(
+            admin_list_text,
+            reply_markup=get_admin_management_keyboard(),
+            parse_mode=ParseMode.MARKDOWN
+        )
+
     elif query.data == 'back_to_admin':
         query.edit_message_text(
             "🎛 *ADMIN PANEL*\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
             "Kerakli bo'limni tanlang:\n\n"
             "━━━━━━━━━━━━━━━━━━━━━",
-            reply_markup=get_admin_keyboard(),
+            reply_markup=get_admin_keyboard(user_id),
             parse_mode=ParseMode.MARKDOWN
         )
 
@@ -440,7 +563,7 @@ def button_callback(update: Update, context: CallbackContext):
 
 def handle_message(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    text = update.message.text.strip()
+    text = update.message.text.strip() if update.message.text else ""
 
     # Bloklangan foydalanuvchilarni tekshirish
     if user_id in blocked_users:
@@ -451,8 +574,8 @@ def handle_message(update: Update, context: CallbackContext):
         )
         return
 
-    # Obunani tekshirish
-    if user_id != ADMIN_ID:
+    # Obunani tekshirish (adminlar uchun emas)
+    if not is_admin(user_id):
         if not check_subscription(update, context):
             return
 
@@ -464,7 +587,7 @@ def handle_message(update: Update, context: CallbackContext):
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # ADMIN ACTIONS
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    if user_id == ADMIN_ID and 'action' in context.user_data:
+    if is_admin(user_id) and 'action' in context.user_data:
         action = context.user_data['action']
 
         # KINO RAQAMINI QO'SHISH
@@ -519,14 +642,14 @@ def handle_message(update: Update, context: CallbackContext):
                     "━━━━━━━━━━━━━━━━━━━━━\n\n"
                     f"🎬 Raqam: `{text}`\n"
                     f"📝 Nomi: {movie_name}",
-                    reply_markup=get_admin_keyboard(),
+                    reply_markup=get_admin_keyboard(user_id),
                     parse_mode=ParseMode.MARKDOWN
                 )
             else:
                 update.message.reply_text(
                     f"❌ *TOPILMADI!*\n\n"
                     f"`{text}` raqamli kino bazada mavjud emas!",
-                    reply_markup=get_admin_keyboard(),
+                    reply_markup=get_admin_keyboard(user_id),
                     parse_mode=ParseMode.MARKDOWN
                 )
                 del context.user_data['action']
@@ -543,10 +666,22 @@ def handle_message(update: Update, context: CallbackContext):
                 return
 
             block_id = int(text)
-            if block_id == ADMIN_ID:
+
+            # Asosiy adminni bloklash mumkin emas
+            if block_id == MAIN_ADMIN_ID:
                 update.message.reply_text(
                     "❌ *XATO!*\n\n"
-                    "O'zingizni bloklay olmaysiz!",
+                    "Asosiy adminni bloklash mumkin emas!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            # Adminlarni bloklash mumkin emas
+            if block_id in admins:
+                update.message.reply_text(
+                    "❌ *XATO!*\n\n"
+                    "Adminni bloklash mumkin emas!\n\n"
+                    "Avval admin huquqini olib tashlang.",
                     parse_mode=ParseMode.MARKDOWN
                 )
                 return
@@ -597,10 +732,130 @@ def handle_message(update: Update, context: CallbackContext):
                 del context.user_data['action']
             return
 
+        # ADMIN QO'SHISH - FAQAT ASOSIY ADMIN
+        elif action == 'add_admin':
+            if not is_main_admin(user_id):
+                update.message.reply_text(
+                    "❌ *RUXSAT RAD ETILDI!*\n\n"
+                    "Faqat asosiy admin boshqa adminlar qo'sha oladi!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            if not text.isdigit():
+                update.message.reply_text(
+                    "❌ *XATO!*\n\n"
+                    "Iltimos, faqat ID raqam yuboring!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            new_admin_id = int(text)
+
+            if new_admin_id in admins:
+                update.message.reply_text(
+                    "❌ *XATO!*\n\n"
+                    f"`{new_admin_id}` allaqachon admin!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            admins.add(new_admin_id)
+            save_admins(admins)
+            del context.user_data['action']
+
+            update.message.reply_text(
+                "✅ *ADMIN QO'SHILDI!*\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"👨‍💼 Yangi admin ID: `{new_admin_id}`\n\n"
+                "Ushbu foydalanuvchi endi admin huquqlariga ega!",
+                reply_markup=get_admin_management_keyboard(),
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+            # Yangi adminni xabardor qilish
+            try:
+                context.bot.send_message(
+                    chat_id=new_admin_id,
+                    text="🎉 *TABRIKLAYMIZ!*\n\n"
+                         "━━━━━━━━━━━━━━━━━━━━━\n\n"
+                         "👑 Siz admin huquqiga ega bo'ldingiz!\n\n"
+                         "📝 /admin - Admin panel\n\n"
+                         "━━━━━━━━━━━━━━━━━━━━━",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except:
+                pass
+            return
+
+        # ADMIN O'CHIRISH - FAQAT ASOSIY ADMIN
+        elif action == 'remove_admin':
+            if not is_main_admin(user_id):
+                update.message.reply_text(
+                    "❌ *RUXSAT RAD ETILDI!*\n\n"
+                    "Faqat asosiy admin boshqa adminlarni o'chira oladi!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            if not text.isdigit():
+                update.message.reply_text(
+                    "❌ *XATO!*\n\n"
+                    "Iltimos, faqat ID raqam yuboring!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            remove_admin_id = int(text)
+
+            # Asosiy adminni o'chirish mumkin emas
+            if remove_admin_id == MAIN_ADMIN_ID:
+                update.message.reply_text(
+                    "❌ *XATO!*\n\n"
+                    "Asosiy adminni o'chirish mumkin emas!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            if remove_admin_id not in admins:
+                update.message.reply_text(
+                    "❌ *TOPILMADI!*\n\n"
+                    f"`{remove_admin_id}` adminlar ro'yxatida yo'q!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            admins.remove(remove_admin_id)
+            save_admins(admins)
+            del context.user_data['action']
+
+            update.message.reply_text(
+                "✅ *ADMIN O'CHIRILDI!*\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"➖ Admin ID: `{remove_admin_id}`\n\n"
+                "Ushbu foydalanuvchi endi oddiy foydalanuvchi!",
+                reply_markup=get_admin_management_keyboard(),
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+            # O'chirilgan adminni xabardor qilish
+            try:
+                context.bot.send_message(
+                    chat_id=remove_admin_id,
+                    text="⚠️ *XABARDORLIK*\n\n"
+                         "━━━━━━━━━━━━━━━━━━━━━\n\n"
+                         "Sizning admin huquqingiz olib tashlandi!\n\n"
+                         "━━━━━━━━━━━━━━━━━━━━━",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except:
+                pass
+            return
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # KINO SO'RASH (ODDIY FOYDALANUVCHI)
+    # KINO SO'RASH (BARCHA FOYDALANUVCHILAR)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    if text.isdigit():
+    if text and text.isdigit():
         movie_num = text
         if movie_num in movies:
             movie_data = movies[movie_num]
@@ -633,7 +888,7 @@ def handle_message(update: Update, context: CallbackContext):
                 f"📊 Bazada *{len(movies)}* ta kino mavjud",
                 parse_mode=ParseMode.MARKDOWN
             )
-    else:
+    elif text:
         update.message.reply_text(
             "❌ *NOTO'G'RI FORMAT!*\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -650,7 +905,7 @@ def handle_message(update: Update, context: CallbackContext):
 def handle_video(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
 
-    if user_id != ADMIN_ID:
+    if not is_admin(user_id):
         update.message.reply_text(
             "❌ *RUXSAT RAD ETILDI!*\n\n"
             "Sizda admin huquqi yo'q!",
@@ -681,7 +936,7 @@ def handle_video(update: Update, context: CallbackContext):
             f"📝 Nomi: {movie_name}\n"
             f"📅 {movies[movie_num]['added_date']}\n\n"
             "━━━━━━━━━━━━━━━━━━━━━",
-            reply_markup=get_admin_keyboard(),
+            reply_markup=get_admin_keyboard(user_id),
             parse_mode=ParseMode.MARKDOWN
         )
     else:
@@ -693,15 +948,18 @@ def handle_video(update: Update, context: CallbackContext):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 📢 REKLAMA HANDLER
+# 📢 UNIVERSAL REKLAMA HANDLER - HAR QANDAY FORMATDAGI XABARLAR
 # ═══════════════════════════════════════════════════════════════════════════
 
-def handle_ad_content(update: Update, context: CallbackContext):
+def handle_broadcast(update: Update, context: CallbackContext):
+    """Har qanday formatdagi xabarni barcha foydalanuvchilarga yuborish"""
     user_id = update.effective_user.id
 
-    if user_id != ADMIN_ID:
+    # Admin tekshirish
+    if not is_admin(user_id):
         return
 
+    # Reklama rejimini tekshirish
     if 'action' not in context.user_data or context.user_data['action'] != 'send_ad':
         return
 
@@ -709,58 +967,154 @@ def handle_ad_content(update: Update, context: CallbackContext):
     success = 0
     failed = 0
 
-    update.message.reply_text(
+    # Yuborilayotganini xabar qilish
+    status_msg = update.message.reply_text(
         "⏳ *REKLAMA YUBORILMOQDA...*\n\n"
         "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👥 Jami foydalanuvchilar: *{len(stats['total_users'])}* ta\n\n"
         "Iltimos, kuting...",
         parse_mode=ParseMode.MARKDOWN
     )
 
+    # Barcha foydalanuvchilarga yuborish
     for user in stats['total_users']:
+        if user in blocked_users:
+            failed += 1
+            continue
+
         try:
+            # MATN XABAR
             if message.text:
                 context.bot.send_message(
                     chat_id=user,
-                    text=f"📢 *REKLAMA*\n\n━━━━━━━━━━━━━━━━━━━━━\n\n{message.text}",
-                    parse_mode=ParseMode.MARKDOWN
+                    text=message.text,
+                    parse_mode=ParseMode.MARKDOWN if '*' in message.text or '_' in message.text else None
                 )
+
+            # RASM
             elif message.photo:
                 context.bot.send_photo(
                     chat_id=user,
                     photo=message.photo[-1].file_id,
-                    caption=f"📢 *REKLAMA*\n\n━━━━━━━━━━━━━━━━━━━━━\n\n{message.caption or ''}",
-                    parse_mode=ParseMode.MARKDOWN
+                    caption=message.caption,
+                    parse_mode=ParseMode.MARKDOWN if message.caption and (
+                                '*' in message.caption or '_' in message.caption) else None
                 )
+
+            # VIDEO
             elif message.video:
                 context.bot.send_video(
                     chat_id=user,
                     video=message.video.file_id,
-                    caption=f"📢 *REKLAMA*\n\n━━━━━━━━━━━━━━━━━━━━━\n\n{message.caption or ''}",
-                    parse_mode=ParseMode.MARKDOWN
+                    caption=message.caption,
+                    parse_mode=ParseMode.MARKDOWN if message.caption and (
+                                '*' in message.caption or '_' in message.caption) else None
                 )
+
+            # HUJJAT
             elif message.document:
                 context.bot.send_document(
                     chat_id=user,
                     document=message.document.file_id,
-                    caption=f"📢 *REKLAMA*\n\n━━━━━━━━━━━━━━━━━━━━━\n\n{message.caption or ''}",
-                    parse_mode=ParseMode.MARKDOWN
+                    caption=message.caption,
+                    parse_mode=ParseMode.MARKDOWN if message.caption and (
+                                '*' in message.caption or '_' in message.caption) else None
                 )
+
+            # AUDIO
+            elif message.audio:
+                context.bot.send_audio(
+                    chat_id=user,
+                    audio=message.audio.file_id,
+                    caption=message.caption,
+                    parse_mode=ParseMode.MARKDOWN if message.caption and (
+                                '*' in message.caption or '_' in message.caption) else None
+                )
+
+            # VOICE
+            elif message.voice:
+                context.bot.send_voice(
+                    chat_id=user,
+                    voice=message.voice.file_id,
+                    caption=message.caption,
+                    parse_mode=ParseMode.MARKDOWN if message.caption and (
+                                '*' in message.caption or '_' in message.caption) else None
+                )
+
+            # VIDEO NOTE (Aylana video)
+            elif message.video_note:
+                context.bot.send_video_note(
+                    chat_id=user,
+                    video_note=message.video_note.file_id
+                )
+
+            # STICKER
+            elif message.sticker:
+                context.bot.send_sticker(
+                    chat_id=user,
+                    sticker=message.sticker.file_id
+                )
+
+            # JOYLASHUV
+            elif message.location:
+                context.bot.send_location(
+                    chat_id=user,
+                    latitude=message.location.latitude,
+                    longitude=message.location.longitude
+                )
+
+            # KONTAKT
+            elif message.contact:
+                context.bot.send_contact(
+                    chat_id=user,
+                    phone_number=message.contact.phone_number,
+                    first_name=message.contact.first_name,
+                    last_name=message.contact.last_name
+                )
+
+            # ANIMATION (GIF)
+            elif message.animation:
+                context.bot.send_animation(
+                    chat_id=user,
+                    animation=message.animation.file_id,
+                    caption=message.caption,
+                    parse_mode=ParseMode.MARKDOWN if message.caption and (
+                                '*' in message.caption or '_' in message.caption) else None
+                )
+
             success += 1
+            time.sleep(0.05)  # Flood kontroli uchun
+
         except Exception as e:
             logger.error(f"Reklamani yuborishda xato {user}: {e}")
             failed += 1
 
+    # Actionni o'chirish
     del context.user_data['action']
 
-    update.message.reply_text(
-        "✅ *REKLAMA YUBORILDI!*\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"✅ Muvaffaqiyatli: *{success}* ta\n"
-        f"❌ Xato: *{failed}* ta\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━",
-        reply_markup=get_admin_keyboard(),
-        parse_mode=ParseMode.MARKDOWN
-    )
+    # Yakuniy natija
+    try:
+        status_msg.edit_text(
+            "✅ *REKLAMA YUBORILDI!*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"✅ Muvaffaqiyatli: *{success}* ta\n"
+            f"❌ Xato: *{failed}* ta\n"
+            f"👥 Jami: *{len(stats['total_users'])}* ta\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━",
+            reply_markup=get_admin_keyboard(user_id),
+            parse_mode=ParseMode.MARKDOWN
+        )
+    except:
+        update.message.reply_text(
+            "✅ *REKLAMA YUBORILDI!*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"✅ Muvaffaqiyatli: *{success}* ta\n"
+            f"❌ Xato: *{failed}* ta\n"
+            f"👥 Jami: *{len(stats['total_users'])}* ta\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━",
+            reply_markup=get_admin_keyboard(user_id),
+            parse_mode=ParseMode.MARKDOWN
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -783,30 +1137,95 @@ def error_handler(update: Update, context: CallbackContext):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    """Botni ishga tushiruvchi asosiy funksiya"""
+    try:
+        logger.info("🚀 Bot ishga tushmoqda...")
 
-    # Handlerlar
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("admin", admin_panel))
-    dp.add_handler(CallbackQueryHandler(button_callback))
-    dp.add_handler(MessageHandler(Filters.video, handle_video))
-    dp.add_handler(MessageHandler(Filters.photo | Filters.document, handle_ad_content))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-    dp.add_error_handler(error_handler)
+        # Updater va Dispatcher yaratish
+        updater = Updater(BOT_TOKEN, use_context=True)
+        dp = updater.dispatcher
 
-    # Botni ishga tushirish
-    logger.info("=" * 60)
-    logger.info("🎬 TELEGRAM KINO BOT ISHGA TUSHDI!")
-    logger.info("=" * 60)
-    logger.info(f"📊 Bazada {len(movies)} ta kino mavjud")
-    logger.info(f"👥 Jami foydalanuvchilar: {len(stats['total_users'])}")
-    logger.info(f"🚫 Bloklangan: {len(blocked_users)}")
-    logger.info("=" * 60)
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # KOMANDA HANDLERLAR
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        dp.add_handler(CommandHandler("start", start))
+        dp.add_handler(CommandHandler("admin", admin_panel))
 
-    updater.start_polling()
-    updater.idle()
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # CALLBACK QUERY HANDLER
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        dp.add_handler(CallbackQueryHandler(button_callback))
 
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # VIDEO HANDLER - Kino qo'shish uchun
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        dp.add_handler(MessageHandler(Filters.video, handle_video))
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # UNIVERSAL BROADCAST HANDLER - Har qanday formatdagi xabar
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        dp.add_handler(MessageHandler(
+            Filters.photo | Filters.document | Filters.audio |
+            Filters.voice | Filters.video_note | Filters.sticker |
+            Filters.location | Filters.contact | Filters.animation,
+            handle_broadcast
+        ))
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # MATN XABAR HANDLER - Eng oxirida qo'shiladi
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # XATOLIK HANDLER
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        dp.add_error_handler(error_handler)
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # BOTNI ISHGA TUSHIRISH
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        logger.info("✅ Bot muvaffaqiyatli ishga tushdi!")
+        logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.info(f"👑 Asosiy Admin ID: {MAIN_ADMIN_ID}")
+        logger.info(f"👨‍💼 Jami adminlar: {len(admins)} ta")
+        logger.info(f"👥 Jami foydalanuvchilar: {len(stats['total_users'])} ta")
+        logger.info(f"🎬 Bazadagi kinolar: {len(movies)} ta")
+        logger.info(f"🚫 Bloklangan: {len(blocked_users)} ta")
+        logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.info("🔄 Bot xabarlarni kutmoqda...")
+
+        # Polling rejimida ishga tushirish
+        updater.start_polling()
+        updater.idle()
+
+    except Exception as e:
+        logger.error(f"❌ Botni ishga tushirishda xatolik: {e}")
+        raise
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 🎯 DASTURNI ISHGA TUSHIRISH NUQTASI
+# ═══════════════════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
-    main()
+    try:
+        print("\n" + "═" * 80)
+        print("🎬 TELEGRAM KINO BOT - MULTI ADMIN PROFESSIONAL VERSION")
+        print("═" * 80)
+        print("🚀 Bot ishga tushmoqda...")
+        print("=" * 80 + "\n")
+
+        main()
+
+    except KeyboardInterrupt:
+        print("\n" + "=" * 80)
+        print("⏹ Bot to'xtatildi!")
+        print("=" * 80 + "\n")
+        logger.info("⏹ Bot foydalanuvchi tomonidan to'xtatildi")
+
+    except Exception as e:
+        print("\n" + "=" * 80)
+        print(f"❌ KRITIK XATOLIK: {e}")
+        print("=" * 80 + "\n")
+        logger.critical(f"❌ Kritik xatolik: {e}")
+        raise
