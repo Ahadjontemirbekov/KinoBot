@@ -28,7 +28,7 @@ BLOCKED_FILE = 'blocked_users.json'
 ADMINS_FILE = 'admins.json'
 
 MAIN_ADMIN_ID = 8381500320  # 🔴 ASOSIY ADMIN ID (faqat siz!)
-BOT_TOKEN = "8266825005:AAEj2OcohuiT2dbj09BQQbW6hUKUZXN5j-4"
+BOT_TOKEN = "8389090424:AAHTzrmjvCkp32jVucBT1f9_oJXdO5SI9-U"
 
 # 📢 MAJBURIY KANALLAR
 REQUIRED_CHANNELS = [
@@ -1236,6 +1236,7 @@ if __name__ == '__main__':
         print("=" * 80 + "\n")
         logger.critical(f"❌ Kritik xatolik: {e}")
         raise
+
 
 
 
