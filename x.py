@@ -1,7 +1,8 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.constants import ParseMode
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, CallbackQueryHandler
+from telegram.ext import filters
 import json
 import os
 from datetime import datetime
@@ -1235,4 +1236,5 @@ if __name__ == '__main__':
         print("=" * 80 + "\n")
         logger.critical(f"❌ Kritik xatolik: {e}")
         raise
+
 
