@@ -27,7 +27,7 @@ STATS_FILE = 'stats.json'
 BLOCKED_FILE = 'blocked_users.json'
 ADMINS_FILE = 'admins.json'
 
-MAIN_ADMIN_ID = 8381500320  # 🔴 ASOSIY ADMIN ID (faqat siz!)
+MAIN_ADMIN_ID = 6659797188  # 🔴 ASOSIY ADMIN ID (faqat siz!)
 BOT_TOKEN = "8389090424:AAHTzrmjvCkp32jVucBT1f9_oJXdO5SI9-U"
 
 # 📢 MAJBURIY KANALLAR
@@ -1232,6 +1232,7 @@ if __name__ == '__main__':
         print("=" * 80 + "\n")
         logger.critical(f"❌ Kritik xatolik: {e}")
         raise
+
 
 
 
